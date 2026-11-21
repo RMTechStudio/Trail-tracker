@@ -39,6 +39,18 @@ button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 .go{width:112px;height:112px;border-radius:50%;border:0;background:var(--ac);color:var(--ac-ink);font:inherit;font-size:1.25rem;font-weight:800;cursor:pointer}
 .sm{height:56px;padding:0 22px;border-radius:28px;border:1px solid var(--line);background:var(--sf);color:var(--ink);font:inherit;font-weight:700;cursor:pointer}
 .sm.stop{background:var(--stop);border-color:var(--stop);color:#fff}
+.tgt{display:flex;align-items:center;gap:10px;background:var(--sf);border-radius:14px;padding:8px 14px;margin-bottom:12px}
+.tgt label{font-weight:600;flex:none}
+.tgt input{flex:1;min-width:0;border:0;background:var(--ac2);color:var(--ink);font:inherit;font-weight:700;font-size:1.1rem;text-align:center;border-radius:9px;padding:6px}
+.tgt span{color:var(--mute);flex:none}
+.tgl{margin-top:12px;font-weight:700;min-height:1.5em}
+.pr{background:var(--ac);color:var(--ac-ink);border-radius:16px;padding:12px 16px;margin-top:12px;font-weight:700;line-height:1.6}
+.prcard{background:var(--sf);border-radius:16px;padding:12px 16px;margin-bottom:14px}
+.prcard .pt{font-weight:800;margin-bottom:4px}
+.prcard .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
+.prcard .row span{flex:1}
+.prcard .row small{color:var(--mute);width:44px;text-align:right}
+.bdg{font-style:normal;font-size:.72rem;background:var(--ac2);color:var(--ac);padding:1px 7px;border-radius:8px;margin-left:6px;font-weight:700}
 [hidden]{display:none!important}
 .week{background:var(--ac);color:var(--ac-ink);border-radius:20px;padding:16px 18px;margin-bottom:14px}
 .week b{font-size:2rem;font-variant-numeric:tabular-nums}
@@ -65,15 +77,18 @@ button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 <section id="rec">
 <div class="types" id="types">
 <button data-t="run" aria-pressed="true">跑步</button><button data-t="walk" aria-pressed="false">步行</button><button data-t="bike" aria-pressed="false">騎車</button></div>
+<div class="tgt"><label for="tgi">目標配速</label><input id="tgi" type="text" inputmode="text" placeholder="例如 5:30" autocomplete="off"><span id="tgu">/km</span></div>
 <div class="hero">
 <div class="big" id="d">0.00</div><div class="unit">公里</div>
 <div class="stats">
 <div><b id="t">0:00</b><span>時間</span></div>
 <div><b id="p">--</b><span id="pl">配速 /km</span></div>
 <div><b id="e">0</b><span>爬升 m</span></div></div>
+<div class="tgl" id="tgl"></div>
 <div class="map" id="live"></div>
 </div>
 <div class="gps" id="gps">按開始後會要求定位權限。</div>
+<div class="pr" id="pr" hidden></div>
 <div class="ctl">
 <button class="go" id="start">開始</button>
 <button class="sm" id="pause" hidden>暫停</button>
@@ -83,6 +98,7 @@ button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 
 <section id="his" hidden>
 <div class="week"><div>近 7 天</div><b id="wk">0.0</b> 公里</div>
+<div id="prc"></div>
 <div id="hl"></div>
 </section>
 </main>
@@ -121,6 +137,8 @@ var km=S?S.dist/1000:0,el=elapsed();
 $("d").textContent=km.toFixed(2);$("t").textContent=ft(el);
 $("p").textContent=S?pace(km,el,type):"--";$("e").textContent=S?Math.round(S.up):0;
 $("pl").textContent=type==="bike"?"km/h":"配速 /km";
+var T=parseT($("tgi").value,type),tl=$("tgl");
+if(S&&T&&km>=0.05){var tt=type==="bike"?km/T*3600:T*km,df=tt-el;tl.textContent="目標 "+$("tgi").value.trim()+(type==="bike"?" km/h":" /km")+"　"+(df>=0?"領先 ":"落後 ")+ft(Math.abs(df));tl.style.color=df>=0?"var(--ac)":"var(--stop)"}else{tl.textContent=S&&T?"目標已設定，開始移動後顯示領先或落後":""}
 $("dd").textContent=km.toFixed(2)+" km";$("dtm").textContent=ft(el);
 if(S)drawLive()}
 function onPos(pos){
@@ -133,7 +151,7 @@ if(L){var d=hav(L.p,p),dt=Math.max((t-L.t)/1000,1);
 if(d<3||d/dt>40)return;
 S.dist+=d;
 if(c.altitude!=null&&L.a!=null&&c.altitude-L.a>1.5)S.up+=c.altitude-L.a}
-S.last={p:p,t:t,a:c.altitude};S.pts.push(p);if(map&&S.pts.length===1)map.setView(p,17)}
+S.log.push([S.dist,elapsed()]);S.last={p:p,t:t,a:c.altitude};S.pts.push(p);if(map&&S.pts.length===1)map.setView(p,17)}
 function onErr(e){$("gps").textContent=e.code===1?"沒有定位權限，請在瀏覽器設定中允許。":"取得定位失敗，請到空曠處再試。"}
 function wl(){try{if(navigator.wakeLock&&S&&!S.paused)navigator.wakeLock.request("screen").then(function(l){lock=l}).catch(function(){})}catch(e){}}
 function unwl(){try{if(lock){lock.release();lock=null}}catch(e){}}
@@ -144,7 +162,7 @@ $("start").hidden=run;$("pause").hidden=!run;$("end").hidden=!run;$("blk").hidde
 document.querySelectorAll("#types button").forEach(function(b){b.disabled=run})}
 $("start").addEventListener("click",function(){
 if(!navigator.geolocation){$("gps").textContent="這個瀏覽器不支援定位。";return}
-S={dist:0,up:0,acc:0,seg:Date.now(),paused:false,pts:[],last:null,t0:Date.now()};
+$("pr").hidden=true;S={dist:0,up:0,acc:0,seg:Date.now(),paused:false,pts:[],log:[],last:null,t0:Date.now()};
 watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 tick=setInterval(paint,1000);wl();setUi(true);$("pause").textContent="暫停";paint()});
 $("pause").addEventListener("click",function(){
@@ -157,8 +175,12 @@ var el=elapsed();clearInterval(tick);navigator.geolocation.clearWatch(watchId);u
 var s=S;S=null;setUi(false);
 if(s.dist<30){$("gps").textContent="距離太短，這次沒有儲存。";clearLive();paint();return}
 var pts=s.pts,step=Math.ceil(pts.length/300),th=pts.filter(function(p,i){return i%step===0});
-var a=load();a.unshift({id:s.t0,type:type,km:s.dist/1000,sec:el,up:s.up,pts:th});store(a);
+var a=load(),old=prs(a),bests={},msgs=[];
+dists(type).forEach(function(D){var v=best(s.log,D);if(v==null)return;bests[D]=v;var o=old[type]&&old[type][D];
+if(!o)msgs.push(dl(D)+" "+ft(v)+"（首次紀錄）");else if(v<o.sec)msgs.push(dl(D)+" "+ft(v)+"，破 PR！前次 "+ft(o.sec))});
+a.unshift({id:s.t0,type:type,km:s.dist/1000,sec:el,up:s.up,pts:th,bests:bests});store(a);
 $("gps").textContent="已儲存這次"+NAME[type]+"，到「歷史」查看。";
+if(msgs.length){$("pr").innerHTML=msgs.join("<br>");$("pr").hidden=false}
 clearLive();paint();render()});
 
 /* ---- blackout ---- */
@@ -173,7 +195,7 @@ if(r>=1){stopHold();$("dark").hidden=true;return}raf=requestAnimationFrame(f)})(
 
 /* ---- ui ---- */
 document.querySelectorAll("#types button").forEach(function(b){b.addEventListener("click",function(){
-type=b.getAttribute("data-t");
+type=b.getAttribute("data-t");loadTg();
 document.querySelectorAll("#types button").forEach(function(o){o.setAttribute("aria-pressed",o===b)});paint()})});
 document.querySelectorAll(".tabs button").forEach(function(b){b.addEventListener("click",function(){
 document.querySelectorAll(".tabs button").forEach(function(o){o.setAttribute("aria-selected",o===b)});
@@ -182,11 +204,11 @@ $("rec").hidden=b.getAttribute("data-v")!=="rec";$("his").hidden=b.getAttribute(
 function render(){
 var a=load(),wk=Date.now()-7*864e5,sum=0;
 a.forEach(function(x){if(x.id>=wk)sum+=x.km});
-$("wk").textContent=sum.toFixed(1);
+$("wk").textContent=sum.toFixed(1);var P=prs(a);prCard(P);
 if(!a.length){$("hl").innerHTML='<div class="empty">還沒有紀錄，去跑一趟吧。</div>';return}
 $("hl").innerHTML=a.map(function(x){
 var d=new Date(x.id),ds=(d.getMonth()+1)+"/"+d.getDate()+" "+(d.getHours()<10?"0":"")+d.getHours()+":"+(d.getMinutes()<10?"0":"")+d.getMinutes();
-return '<div class="act" data-a="'+x.id+'"><div class="m"><svg viewBox="0 0 86 64">'+route(x.pts,86,64)+'</svg></div><div class="i"><b>'+x.km.toFixed(2)+' 公里</b><small>'+NAME[x.type]+"　"+ds+"</small><small>"+ft(x.sec)+"　"+pace(x.km,x.sec,x.type)+(x.type==="bike"?" km/h":" /km")+"　爬升 "+Math.round(x.up)+' m</small></div><button class="x" data-id="'+x.id+'">刪除</button></div>'}).join("")}
+return '<div class="act" data-a="'+x.id+'"><div class="m"><svg viewBox="0 0 86 64">'+route(x.pts,86,64)+'</svg></div><div class="i"><b>'+x.km.toFixed(2)+' 公里</b>'+badge(P,x)+'<small>'+NAME[x.type]+"　"+ds+"</small><small>"+ft(x.sec)+"　"+pace(x.km,x.sec,x.type)+(x.type==="bike"?" km/h":" /km")+"　爬升 "+Math.round(x.up)+' m</small></div><button class="x" data-id="'+x.id+'">刪除</button></div>'}).join("")}
 $("hl").addEventListener("click",function(e){
 var id=e.target.getAttribute&&e.target.getAttribute("data-id");if(!id){var ac=e.target.closest&&e.target.closest(".act");if(ac)openMod(ac.getAttribute("data-a"));return}
 if(e.target.getAttribute("data-s")!=="1"){e.target.setAttribute("data-s","1");e.target.textContent="確定刪除？";return}
@@ -218,7 +240,23 @@ L.circleMarker(x.pts[0],{radius:7,color:"#fff",weight:3,fillColor:"#fff",fillOpa
 L.circleMarker(x.pts[x.pts.length-1],{radius:7,color:"#fff",weight:3,fillColor:"#0b8f61",fillOpacity:1}).addTo(mm);
 mm.fitBounds(pl.getBounds(),{padding:[30,30]})}
 $("mclose").addEventListener("click",function(){$("modal").hidden=true});
-initMap();paint();render();
+function parseT(s,ty){s=(s||"").trim();if(!s)return 0;if(ty==="bike"){var v=parseFloat(s);return v>0?v:0}var m=s.match(/^(\d+):(\d{1,2})$/);if(m)return +m[1]*60+ +m[2];var n=parseFloat(s);return n>0?n*60:0}
+function tgAll(){try{return JSON.parse(localStorage.getItem("trk-tg")||"{}")}catch(e){return{}}}
+function loadTg(){$("tgi").value=tgAll()[type]||"";$("tgi").placeholder=type==="bike"?"例如 22":"例如 5:30";$("tgu").textContent=type==="bike"?"km/h":"/km";paint()}
+$("tgi").addEventListener("input",function(){var o=tgAll();o[type]=$("tgi").value;try{localStorage.setItem("trk-tg",JSON.stringify(o))}catch(e){}paint()});
+function dists(ty){return ty==="bike"?[5000,10000,20000,40000]:[400,800,1000,1600,3000,5000,10000]}
+function dl(D){return D>=1000&&D%1000===0?D/1000+"K":D+"m"}
+function best(log,D){var b=Infinity,j=0;
+for(var i=0;i<log.length;i++){var tg=log[i][0]-D;if(tg<0)continue;
+while(j<i&&log[j+1][0]<=tg)j++;
+var a=log[j],c=log[j+1]||log[i],f=c[0]>a[0]?(tg-a[0])/(c[0]-a[0]):0,t0=a[1]+f*(c[1]-a[1]),v=log[i][1]-t0;
+if(v<b)b=v}
+return b===Infinity?null:b}
+function prs(a){var o={};a.forEach(function(x){var b=x.bests||{};Object.keys(b).forEach(function(k){var t=x.type;o[t]=o[t]||{};if(!o[t][k]||b[k]<o[t][k].sec)o[t][k]={sec:b[k],id:x.id}})});return o}
+function badge(P,x){var pt=P[x.type]||{},s="";Object.keys(pt).forEach(function(k){if(pt[k].id===x.id)s+=" "+dl(+k)});return s?'<em class="bdg">PR'+s+"</em>":""}
+function prCard(P){var h="";["run","walk","bike"].forEach(function(t){if(!P[t])return;dists(t).forEach(function(D){var r=P[t][D];if(!r)return;var d=new Date(r.id);h+="<div class=\"row\"><span>"+NAME[t]+" "+dl(D)+"</span><b>"+ft(r.sec)+"</b><small>"+(d.getMonth()+1)+"/"+d.getDate()+"</small></div>"})});
+$("prc").innerHTML=h?'<div class="prcard"><div class="pt">個人紀錄</div>'+h+"</div>":""}
+loadTg();initMap();paint();render();
 </script>
 </body>
 </html>
