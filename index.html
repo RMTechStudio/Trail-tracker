@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>路跡｜運動追蹤</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#eef4f1;--sf:#fff;--ink:#0e241b;--mute:#62786d;--line:#d3e0d9;--ac:#0b8f61;--ac2:#e5f4ec;--ac-ink:#fff;--stop:#c93a3a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0c1713;--sf:#14241d;--ink:#e6f3ec;--mute:#8fa89b;--line:#244034;--ac:#3fd196;--ac2:#173529;--ac-ink:#06130d;--stop:#ff7b7b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0c1713;--sf:#14241d;--ink:#e6f3ec;--mute:#8fa89b;--line:#244034;--ac:#3fd196;--ac2:#173529;--ac-ink:#06130d;--stop:#ff7b7b;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}
+main{max-width:520px;margin:0 auto;padding:16px 16px 40px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+h1{font-size:1.25rem;margin:0;letter-spacing:.06em}
+.tabs{display:flex;background:var(--line);border-radius:11px;padding:3px}
+.tabs button{border:0;background:none;color:var(--mute);font:inherit;font-weight:600;padding:6px 16px;border-radius:8px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--sf);color:var(--ink)}
+button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.types{display:flex;gap:8px;margin-bottom:14px}
+.types button{flex:1;border:1px solid var(--line);background:var(--sf);color:var(--ink);font:inherit;padding:9px 0;border-radius:12px;cursor:pointer}
+.types button[aria-pressed="true"]{background:var(--ac2);border-color:var(--ac);color:var(--ac);font-weight:700}
+.types button:disabled{opacity:.45}
+.hero{background:var(--sf);border-radius:24px;padding:22px 20px 16px;text-align:center}
+.big{font-size:5.2rem;line-height:1;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.unit{color:var(--mute);font-size:1rem;margin-top:2px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:18px}
+.stats b{display:block;font-size:1.35rem;font-variant-numeric:tabular-nums;line-height:1.2}
+.stats span{color:var(--mute);font-size:.82rem}
+.map{margin-top:14px;background:var(--ac2);border-radius:16px;height:250px;overflow:hidden;position:relative;z-index:0}
+#modal{position:fixed;inset:0;z-index:40;background:var(--bg);display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+#modal .bar{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
+#mmap{flex:1;z-index:0}
+.gps{margin:12px 2px;color:var(--mute);font-size:.88rem;text-align:center;min-height:1.4em}
+.ctl{display:flex;gap:12px;justify-content:center;align-items:center;margin-top:6px}
+.go{width:112px;height:112px;border-radius:50%;border:0;background:var(--ac);color:var(--ac-ink);font:inherit;font-size:1.25rem;font-weight:800;cursor:pointer}
+.sm{height:56px;padding:0 22px;border-radius:28px;border:1px solid var(--line);background:var(--sf);color:var(--ink);font:inherit;font-weight:700;cursor:pointer}
+.sm.stop{background:var(--stop);border-color:var(--stop);color:#fff}
+[hidden]{display:none!important}
+.week{background:var(--ac);color:var(--ac-ink);border-radius:20px;padding:16px 18px;margin-bottom:14px}
+.week b{font-size:2rem;font-variant-numeric:tabular-nums}
+.act{background:var(--sf);border-radius:16px;padding:12px;margin-bottom:10px;display:flex;gap:12px;align-items:center}
+.act .m{width:86px;height:64px;background:var(--ac2);border-radius:10px;flex:none}
+.act .m svg{width:100%;height:100%;display:block}
+.act .i{flex:1;min-width:0}
+.act .i b{font-size:1.1rem}
+.act .i small{display:block;color:var(--mute)}
+.act .x{border:0;background:none;color:var(--mute);font:inherit;font-size:.82rem;cursor:pointer;padding:6px}
+.empty{text-align:center;color:var(--mute);padding:36px 0}
+#dark{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#2f2f2f;user-select:none;-webkit-user-select:none;touch-action:none;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+#dark .dn{font-size:3rem;font-weight:800;font-variant-numeric:tabular-nums}
+#dark .dt{font-size:1.4rem;font-variant-numeric:tabular-nums;margin-top:4px}
+#dark .dh{margin-top:48px;font-size:.9rem;color:#242424}
+#dark i{display:block;height:3px;width:0;background:#2f2f2f;margin-top:10px}
+</style>
+</head>
+<body>
+<main>
+<header><h1>路跡</h1>
+<div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-v="rec">記錄</button><button role="tab" aria-selected="false" data-v="his">歷史</button></div></header>
+
+<section id="rec">
+<div class="types" id="types">
+<button data-t="run" aria-pressed="true">跑步</button><button data-t="walk" aria-pressed="false">步行</button><button data-t="bike" aria-pressed="false">騎車</button></div>
+<div class="hero">
+<div class="big" id="d">0.00</div><div class="unit">公里</div>
+<div class="stats">
+<div><b id="t">0:00</b><span>時間</span></div>
+<div><b id="p">--</b><span id="pl">配速 /km</span></div>
+<div><b id="e">0</b><span>爬升 m</span></div></div>
+<div class="map" id="live"></div>
+</div>
+<div class="gps" id="gps">按開始後會要求定位權限。</div>
+<div class="ctl">
+<button class="go" id="start">開始</button>
+<button class="sm" id="pause" hidden>暫停</button>
+<button class="sm stop" id="end" hidden>結束</button>
+<button class="sm" id="blk" hidden>黑屏</button></div>
+</section>
+
+<section id="his" hidden>
+<div class="week"><div>近 7 天</div><b id="wk">0.0</b> 公里</div>
+<div id="hl"></div>
+</section>
+</main>
+
+<div id="modal" hidden><div class="bar"><span id="mtitle"></span><button class="sm" id="mclose">關閉</button></div><div id="mmap"></div></div>
+
+<div id="dark" hidden><div class="dn" id="dd">0.00 km</div><div class="dt" id="dtm">0:00</div><div class="dh">長按 2 秒解鎖<i id="bar"></i></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+var $=function(i){return document.getElementById(i)};
+var KEY="trk-v1",type="run",S=null,watchId=null,tick=null,lock=null;
+var NAME={run:"跑步",walk:"步行",bike:"騎車"};
+
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){return[]}}
+function store(a){try{localStorage.setItem(KEY,JSON.stringify(a))}catch(e){}}
+function ft(s){s=Math.floor(s);var h=Math.floor(s/3600),m=Math.floor(s%3600/60),c=s%60;return h?h+":"+(m<10?"0":"")+m+":"+(c<10?"0":"")+c:m+":"+(c<10?"0":"")+c}
+function pace(km,sec,ty){if(km<0.02)return "--";if(ty==="bike")return (km/sec*3600).toFixed(1);var s=sec/km;return Math.floor(s/60)+":"+(Math.floor(s%60)<10?"0":"")+Math.floor(s%60)}
+function hav(a,b){var R=6371000,r=Math.PI/180,dl=(b[0]-a[0])*r,dn=(b[1]-a[1])*r,x=Math.sin(dl/2)*Math.sin(dl/2)+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dn/2)*Math.sin(dn/2);return 2*R*Math.asin(Math.sqrt(x))}
+function route(pts,w,h){
+if(pts.length<2)return"";
+var la=pts.map(function(p){return p[0]}),lo=pts.map(function(p){return p[1]});
+var a0=Math.min.apply(null,la),a1=Math.max.apply(null,la),o0=Math.min.apply(null,lo),o1=Math.max.apply(null,lo);
+var k=Math.cos((a0+a1)/2*Math.PI/180),W=Math.max((o1-o0)*k,1e-6),H=Math.max(a1-a0,1e-6),pad=12;
+var sc=Math.min((w-2*pad)/W,(h-2*pad)/H),ox=(w-W*sc)/2,oy=(h-H*sc)/2;
+var d=pts.map(function(p,i){var x=ox+(p[1]-o0)*k*sc,y=oy+(a1-p[0])*sc;return (i?"L":"M")+x.toFixed(1)+" "+y.toFixed(1)}).join("");
+var f=pts[0],l=pts[pts.length-1];
+function xy(p){return [ox+(p[1]-o0)*k*sc,oy+(a1-p[0])*sc]}
+var s=xy(f),e=xy(l);
+return '<path d="'+d+'" fill="none" stroke="var(--ac)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+s[0]+'" cy="'+s[1]+'" r="5" fill="var(--sf)" stroke="var(--ac)" stroke-width="3"/><circle cx="'+e[0]+'" cy="'+e[1]+'" r="5" fill="var(--ac)"/>'}
+
+/* ---- tracking ---- */
+function elapsed(){if(!S)return 0;return S.acc+(S.paused?0:(Date.now()-S.seg)/1000)}
+function paint(){
+var km=S?S.dist/1000:0,el=elapsed();
+$("d").textContent=km.toFixed(2);$("t").textContent=ft(el);
+$("p").textContent=S?pace(km,el,type):"--";$("e").textContent=S?Math.round(S.up):0;
+$("pl").textContent=type==="bike"?"km/h":"配速 /km";
+$("dd").textContent=km.toFixed(2)+" km";$("dtm").textContent=ft(el);
+if(S)drawLive()}
+function onPos(pos){
+if(!S||S.paused)return;
+var c=pos.coords,t=pos.timestamp;
+$("gps").textContent="定位中，精度約 "+Math.round(c.accuracy)+" 公尺";
+if(c.accuracy>35)return;
+var p=[c.latitude,c.longitude],L=S.last;
+if(L){var d=hav(L.p,p),dt=Math.max((t-L.t)/1000,1);
+if(d<3||d/dt>40)return;
+S.dist+=d;
+if(c.altitude!=null&&L.a!=null&&c.altitude-L.a>1.5)S.up+=c.altitude-L.a}
+S.last={p:p,t:t,a:c.altitude};S.pts.push(p);if(map&&S.pts.length===1)map.setView(p,17)}
+function onErr(e){$("gps").textContent=e.code===1?"沒有定位權限，請在瀏覽器設定中允許。":"取得定位失敗，請到空曠處再試。"}
+function wl(){try{if(navigator.wakeLock&&S&&!S.paused)navigator.wakeLock.request("screen").then(function(l){lock=l}).catch(function(){})}catch(e){}}
+function unwl(){try{if(lock){lock.release();lock=null}}catch(e){}}
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")wl()});
+
+function setUi(run){
+$("start").hidden=run;$("pause").hidden=!run;$("end").hidden=!run;$("blk").hidden=!run;
+document.querySelectorAll("#types button").forEach(function(b){b.disabled=run})}
+$("start").addEventListener("click",function(){
+if(!navigator.geolocation){$("gps").textContent="這個瀏覽器不支援定位。";return}
+S={dist:0,up:0,acc:0,seg:Date.now(),paused:false,pts:[],last:null,t0:Date.now()};
+watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+tick=setInterval(paint,1000);wl();setUi(true);$("pause").textContent="暫停";paint()});
+$("pause").addEventListener("click",function(){
+if(!S)return;
+if(S.paused){S.paused=false;S.seg=Date.now();S.last=null;$("pause").textContent="暫停";wl()}
+else{S.acc+=(Date.now()-S.seg)/1000;S.paused=true;$("pause").textContent="繼續";unwl()}});
+$("end").addEventListener("click",function(){
+if(!S)return;
+var el=elapsed();clearInterval(tick);navigator.geolocation.clearWatch(watchId);unwl();
+var s=S;S=null;setUi(false);
+if(s.dist<30){$("gps").textContent="距離太短，這次沒有儲存。";clearLive();paint();return}
+var pts=s.pts,step=Math.ceil(pts.length/300),th=pts.filter(function(p,i){return i%step===0});
+var a=load();a.unshift({id:s.t0,type:type,km:s.dist/1000,sec:el,up:s.up,pts:th});store(a);
+$("gps").textContent="已儲存這次"+NAME[type]+"，到「歷史」查看。";
+clearLive();paint();render()});
+
+/* ---- blackout ---- */
+var hold=null,hs=0,raf=null;
+$("blk").addEventListener("click",function(){$("dark").hidden=false;paint()});
+function stopHold(){hold=null;cancelAnimationFrame(raf);$("bar").style.width="0"}
+$("dark").addEventListener("pointerdown",function(){
+hs=Date.now();hold=1;
+(function f(){if(!hold)return;var r=(Date.now()-hs)/2000;$("bar").style.width=Math.min(r,1)*100+"%";
+if(r>=1){stopHold();$("dark").hidden=true;return}raf=requestAnimationFrame(f)})()});
+["pointerup","pointercancel","pointerleave"].forEach(function(n){$("dark").addEventListener(n,stopHold)});
+
+/* ---- ui ---- */
+document.querySelectorAll("#types button").forEach(function(b){b.addEventListener("click",function(){
+type=b.getAttribute("data-t");
+document.querySelectorAll("#types button").forEach(function(o){o.setAttribute("aria-pressed",o===b)});paint()})});
+document.querySelectorAll(".tabs button").forEach(function(b){b.addEventListener("click",function(){
+document.querySelectorAll(".tabs button").forEach(function(o){o.setAttribute("aria-selected",o===b)});
+$("rec").hidden=b.getAttribute("data-v")!=="rec";$("his").hidden=b.getAttribute("data-v")!=="his";if(!$("his").hidden)render();else if(map)setTimeout(function(){map.invalidateSize()},50)})});
+
+function render(){
+var a=load(),wk=Date.now()-7*864e5,sum=0;
+a.forEach(function(x){if(x.id>=wk)sum+=x.km});
+$("wk").textContent=sum.toFixed(1);
+if(!a.length){$("hl").innerHTML='<div class="empty">還沒有紀錄，去跑一趟吧。</div>';return}
+$("hl").innerHTML=a.map(function(x){
+var d=new Date(x.id),ds=(d.getMonth()+1)+"/"+d.getDate()+" "+(d.getHours()<10?"0":"")+d.getHours()+":"+(d.getMinutes()<10?"0":"")+d.getMinutes();
+return '<div class="act" data-a="'+x.id+'"><div class="m"><svg viewBox="0 0 86 64">'+route(x.pts,86,64)+'</svg></div><div class="i"><b>'+x.km.toFixed(2)+' 公里</b><small>'+NAME[x.type]+"　"+ds+"</small><small>"+ft(x.sec)+"　"+pace(x.km,x.sec,x.type)+(x.type==="bike"?" km/h":" /km")+"　爬升 "+Math.round(x.up)+' m</small></div><button class="x" data-id="'+x.id+'">刪除</button></div>'}).join("")}
+$("hl").addEventListener("click",function(e){
+var id=e.target.getAttribute&&e.target.getAttribute("data-id");if(!id){var ac=e.target.closest&&e.target.closest(".act");if(ac)openMod(ac.getAttribute("data-a"));return}
+if(e.target.getAttribute("data-s")!=="1"){e.target.setAttribute("data-s","1");e.target.textContent="確定刪除？";return}
+store(load().filter(function(x){return String(x.id)!==id}));render()});
+var map=null,line=null,dot=null,mm=null;
+var TILE="https://tile.openstreetmap.org/{z}/{x}/{y}.png",ATT="© OpenStreetMap";
+function initMap(){
+if(map)return;
+if(typeof L==="undefined"){$("live").innerHTML='<div class="empty">地圖載入失敗，請確認網路。</div>';return}
+map=L.map("live",{zoomControl:false}).setView([23.7,121],7);
+L.tileLayer(TILE,{maxZoom:19,attribution:ATT}).addTo(map);
+line=L.polyline([],{color:"#0b8f61",weight:5}).addTo(map);
+dot=L.circleMarker([0,0],{radius:8,color:"#fff",weight:3,fillColor:"#0b8f61",fillOpacity:1})}
+function drawLive(){
+if(!map||!S||!S.pts.length)return;
+line.setLatLngs(S.pts);var l=S.pts[S.pts.length-1];
+dot.setLatLng(l).addTo(map);map.panTo(l)}
+function clearLive(){if(!map)return;line.setLatLngs([]);dot.remove()}
+function openMod(id){
+var x=load().filter(function(a){return String(a.id)===id})[0];
+if(!x||typeof L==="undefined")return;
+$("modal").hidden=false;
+$("mtitle").textContent=NAME[x.type]+" "+x.km.toFixed(2)+" 公里";
+if(mm){mm.remove();mm=null}
+mm=L.map("mmap");
+L.tileLayer(TILE,{maxZoom:19,attribution:ATT}).addTo(mm);
+var pl=L.polyline(x.pts,{color:"#0b8f61",weight:5}).addTo(mm);
+L.circleMarker(x.pts[0],{radius:7,color:"#fff",weight:3,fillColor:"#fff",fillOpacity:1}).addTo(mm);
+L.circleMarker(x.pts[x.pts.length-1],{radius:7,color:"#fff",weight:3,fillColor:"#0b8f61",fillOpacity:1}).addTo(mm);
+mm.fitBounds(pl.getBounds(),{padding:[30,30]})}
+$("mclose").addEventListener("click",function(){$("modal").hidden=true});
+initMap();paint();render();
+</script>
+</body>
+</html>
