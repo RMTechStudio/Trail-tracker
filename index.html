@@ -43,6 +43,7 @@ button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 .tgt label{font-weight:600;flex:none}
 .tgt input{flex:1;min-width:0;border:0;background:var(--ac2);color:var(--ink);font:inherit;font-weight:700;font-size:1.1rem;text-align:center;border-radius:9px;padding:6px}
 .tgt span{color:var(--mute);flex:none}
+.tgt select{border:0;background:var(--ac2);color:var(--ink);font:inherit;font-weight:700;border-radius:9px;padding:7px 6px;max-width:34%}
 .tgl{margin-top:12px;font-weight:700;min-height:1.5em}
 .pr{background:var(--ac);color:var(--ac-ink);border-radius:16px;padding:12px 16px;margin-top:12px;font-weight:700;line-height:1.6}
 .prcard{background:var(--sf);border-radius:16px;padding:12px 16px;margin-bottom:14px}
@@ -78,6 +79,7 @@ button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 <div class="types" id="types">
 <button data-t="run" aria-pressed="true">跑步</button><button data-t="walk" aria-pressed="false">步行</button><button data-t="bike" aria-pressed="false">騎車</button></div>
 <div class="tgt"><label for="tgi">目標配速</label><input id="tgi" type="text" inputmode="text" placeholder="例如 5:30" autocomplete="off"><span id="tgu">/km</span></div>
+<div class="tgt"><label for="gsel">目標</label><select id="gsel"></select><input id="gti" type="text" inputmode="text" placeholder="6:00" autocomplete="off"><span>完成</span></div>
 <div class="hero">
 <div class="big" id="d">0.00</div><div class="unit">公里</div>
 <div class="stats">
@@ -85,6 +87,7 @@ button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 <div><b id="p">--</b><span id="pl">配速 /km</span></div>
 <div><b id="e">0</b><span>爬升 m</span></div></div>
 <div class="tgl" id="tgl"></div>
+<div class="tgl" id="gl"></div>
 <div class="map" id="live"></div>
 </div>
 <div class="gps" id="gps">按開始後會要求定位權限。</div>
@@ -139,6 +142,7 @@ $("p").textContent=S?pace(km,el,type):"--";$("e").textContent=S?Math.round(S.up)
 $("pl").textContent=type==="bike"?"km/h":"配速 /km";
 var T=parseT($("tgi").value,type),tl=$("tgl");
 if(S&&T&&km>=0.05){var tt=type==="bike"?km/T*3600:T*km,df=tt-el;tl.textContent="目標 "+$("tgi").value.trim()+(type==="bike"?" km/h":" /km")+"　"+(df>=0?"領先 ":"落後 ")+ft(Math.abs(df));tl.style.color=df>=0?"var(--ac)":"var(--stop)"}else{tl.textContent=S&&T?"目標已設定，開始移動後顯示領先或落後":""}
+paintGoal();
 $("dd").textContent=km.toFixed(2)+" km";$("dtm").textContent=ft(el);
 if(S)drawLive()}
 function onPos(pos){
@@ -159,7 +163,7 @@ document.addEventListener("visibilitychange",function(){if(document.visibilitySt
 
 function setUi(run){
 $("start").hidden=run;$("pause").hidden=!run;$("end").hidden=!run;$("blk").hidden=!run;
-document.querySelectorAll("#types button").forEach(function(b){b.disabled=run})}
+document.querySelectorAll("#types button").forEach(function(b){b.disabled=run});$("gsel").disabled=run;$("gti").disabled=run}
 $("start").addEventListener("click",function(){
 if(!navigator.geolocation){$("gps").textContent="這個瀏覽器不支援定位。";return}
 $("pr").hidden=true;S={dist:0,up:0,acc:0,seg:Date.now(),paused:false,pts:[],log:[],last:null,t0:Date.now()};
@@ -178,7 +182,11 @@ var pts=s.pts,step=Math.ceil(pts.length/300),th=pts.filter(function(p,i){return 
 var a=load(),old=prs(a),bests={},msgs=[];
 dists(type).forEach(function(D){var v=best(s.log,D);if(v==null)return;bests[D]=v;var o=old[type]&&old[type][D];
 if(!o)msgs.push(dl(D)+" "+ft(v)+"（首次紀錄）");else if(v<o.sec)msgs.push(dl(D)+" "+ft(v)+"，破 PR！前次 "+ft(o.sec))});
-a.unshift({id:s.t0,type:type,km:s.dist/1000,sec:el,up:s.up,pts:th,bests:bests});store(a);
+var G=getGoal(),gl=null;
+if(G){gl={D:G.D,sec:G.sec,hit:false};
+if(bests[G.D]!=null){var gb=bests[G.D];gl.hit=gb<=G.sec;gl.best=gb;msgs.unshift(gl.hit?"達成目標！"+dl(G.D)+" "+ft(gb)+"（目標 "+ft(G.sec)+"）":"目標未達："+dl(G.D)+" 最快 "+ft(gb)+"，差 "+ft(gb-G.sec))}
+else msgs.unshift("目標未達：這次沒有跑滿 "+dl(G.D))}
+a.unshift({id:s.t0,type:type,km:s.dist/1000,sec:el,up:s.up,pts:th,bests:bests,goal:gl});store(a);
 $("gps").textContent="已儲存這次"+NAME[type]+"，到「歷史」查看。";
 if(msgs.length){$("pr").innerHTML=msgs.join("<br>");$("pr").hidden=false}
 clearLive();paint();render()});
@@ -195,7 +203,7 @@ if(r>=1){stopHold();$("dark").hidden=true;return}raf=requestAnimationFrame(f)})(
 
 /* ---- ui ---- */
 document.querySelectorAll("#types button").forEach(function(b){b.addEventListener("click",function(){
-type=b.getAttribute("data-t");loadTg();
+type=b.getAttribute("data-t");loadGoal();loadTg();
 document.querySelectorAll("#types button").forEach(function(o){o.setAttribute("aria-pressed",o===b)});paint()})});
 document.querySelectorAll(".tabs button").forEach(function(b){b.addEventListener("click",function(){
 document.querySelectorAll(".tabs button").forEach(function(o){o.setAttribute("aria-selected",o===b)});
@@ -208,7 +216,7 @@ $("wk").textContent=sum.toFixed(1);var P=prs(a);prCard(P);
 if(!a.length){$("hl").innerHTML='<div class="empty">還沒有紀錄，去跑一趟吧。</div>';return}
 $("hl").innerHTML=a.map(function(x){
 var d=new Date(x.id),ds=(d.getMonth()+1)+"/"+d.getDate()+" "+(d.getHours()<10?"0":"")+d.getHours()+":"+(d.getMinutes()<10?"0":"")+d.getMinutes();
-return '<div class="act" data-a="'+x.id+'"><div class="m"><svg viewBox="0 0 86 64">'+route(x.pts,86,64)+'</svg></div><div class="i"><b>'+x.km.toFixed(2)+' 公里</b>'+badge(P,x)+'<small>'+NAME[x.type]+"　"+ds+"</small><small>"+ft(x.sec)+"　"+pace(x.km,x.sec,x.type)+(x.type==="bike"?" km/h":" /km")+"　爬升 "+Math.round(x.up)+' m</small></div><button class="x" data-id="'+x.id+'">刪除</button></div>'}).join("")}
+return '<div class="act" data-a="'+x.id+'"><div class="m"><svg viewBox="0 0 86 64">'+route(x.pts,86,64)+'</svg></div><div class="i"><b>'+x.km.toFixed(2)+' 公里</b>'+badge(P,x)+'<small>'+NAME[x.type]+"　"+ds+"</small><small>"+ft(x.sec)+"　"+pace(x.km,x.sec,x.type)+(x.type==="bike"?" km/h":" /km")+"　爬升 "+Math.round(x.up)+' m</small>'+gtxt(x)+'</div><button class="x" data-id="'+x.id+'">刪除</button></div>'}).join("")}
 $("hl").addEventListener("click",function(e){
 var id=e.target.getAttribute&&e.target.getAttribute("data-id");if(!id){var ac=e.target.closest&&e.target.closest(".act");if(ac)openMod(ac.getAttribute("data-a"));return}
 if(e.target.getAttribute("data-s")!=="1"){e.target.setAttribute("data-s","1");e.target.textContent="確定刪除？";return}
@@ -256,7 +264,23 @@ function prs(a){var o={};a.forEach(function(x){var b=x.bests||{};Object.keys(b).
 function badge(P,x){var pt=P[x.type]||{},s="";Object.keys(pt).forEach(function(k){if(pt[k].id===x.id)s+=" "+dl(+k)});return s?'<em class="bdg">PR'+s+"</em>":""}
 function prCard(P){var h="";["run","walk","bike"].forEach(function(t){if(!P[t])return;dists(t).forEach(function(D){var r=P[t][D];if(!r)return;var d=new Date(r.id);h+="<div class=\"row\"><span>"+NAME[t]+" "+dl(D)+"</span><b>"+ft(r.sec)+"</b><small>"+(d.getMonth()+1)+"/"+d.getDate()+"</small></div>"})});
 $("prc").innerHTML=h?'<div class="prcard"><div class="pt">個人紀錄</div>'+h+"</div>":""}
-loadTg();initMap();paint();render();
+function parseTime(s){s=(s||"").trim();if(!s)return 0;var p=s.split(":").map(Number);if(p.some(isNaN))return 0;if(p.length===1)return p[0]*60;if(p.length===2)return p[0]*60+p[1];return p[0]*3600+p[1]*60+p[2]}
+function goalAll(){try{return JSON.parse(localStorage.getItem("trk-goal")||"{}")}catch(e){return{}}}
+function saveGoal(){var o=goalAll();o[type]={D:$("gsel").value,t:$("gti").value};try{localStorage.setItem("trk-goal",JSON.stringify(o))}catch(e){}paint()}
+function loadGoal(){var g=goalAll()[type]||{D:"",t:""},h='<option value="">無</option>';
+dists(type).forEach(function(D){h+='<option value="'+D+'">'+dl(D)+"</option>"});
+$("gsel").innerHTML=h;$("gsel").value=g.D||"";$("gti").value=g.t||"";$("gti").placeholder=type==="bike"?"例如 15:00":"例如 6:00"}
+function getGoal(){var D=+$("gsel").value,sec=parseTime($("gti").value);return D&&sec>0?{D:D,sec:sec}:null}
+$("gsel").addEventListener("change",saveGoal);$("gti").addEventListener("input",saveGoal);
+function paintGoal(){
+var G=getGoal(),g=$("gl");if(!G){g.textContent="";return}
+if(!S){g.style.color="var(--mute)";g.textContent="目標："+dl(G.D)+" 跑進 "+ft(G.sec)+"，需要"+(type==="bike"?"時速 "+(G.D/1000/G.sec*3600).toFixed(1)+" km/h":"配速 "+pace(G.D/1000,G.sec,type)+" /km");return}
+var dm=S.dist,t;
+if(dm<G.D){var d=G.sec*(dm/G.D)-elapsed();t=dl(G.D)+" 目標 "+ft(G.sec)+"　還剩 "+Math.round(G.D-dm)+" m　"+(d>=0?"領先 ":"落後 ")+ft(Math.abs(d));g.style.color=d>=0?"var(--ac)":"var(--stop)"}
+else{var b=best(S.log,G.D);if(b==null){g.textContent="";return}t=dl(G.D)+" 最快 "+ft(b)+(b<=G.sec?"　已達標！":"　還差 "+ft(b-G.sec));g.style.color=b<=G.sec?"var(--ac)":"var(--stop)"}
+g.textContent=t}
+function gtxt(x){var g=x.goal;if(!g)return"";return"<small>目標 "+dl(g.D)+" "+ft(g.sec)+(g.hit?"　✓ 達成":"　未達")+"</small>"}
+loadGoal();loadTg();initMap();paint();render();
 </script>
 </body>
 </html>
